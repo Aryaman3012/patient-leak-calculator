@@ -42,54 +42,50 @@ Phone input accepts what UAE clinic staff actually type — `050 123 4567`,
 `0501234567`, `50 123 4567`, `04 123 4567`, or a full international number pasted
 with a `+` — and stores everything as E.164 (`+971501234567`).
 
-### Storage: Google Sheet
+### Storage: leads.json
 
-Leads append as rows to a Google Sheet through an Apps Script web app.
+Leads are appended to `leads.json` as a JSON array by `server.js` — a zero-dependency
+Node server that also serves the page.
 
-> **Use a personal Google account, not a Workspace one.** A Sheet and script were
-> first set up under `flobiz.in`; the deployment returned 403 to every anonymous
-> request even with *Who has access: Anyone* saved, because Workspace domains can
-> disable anonymous Apps Script web apps by admin policy. The page posts without a
-> Google session, so it is refused. A personal `@gmail.com` account has no such
-> policy.
+```bash
+node server.js            # http://localhost:4891
+PORT=8080 node server.js
+LEADS_FILE=/data/leads.json node server.js
+```
 
-Steps, all in the personal account:
+The page posts to a relative `/api/leads`, so it works on whatever host serves it
+with no CORS involved. Point `LEAD_ENDPOINT` at an absolute URL if the API moves.
 
-1. Open [sheets.new](https://sheets.new), name it, then **Extensions → Apps Script**
-2. Replace the default `Code.gs` with [`apps-script/Code.gs`](apps-script/Code.gs), and save
-3. **Deploy → New deployment → Web app**
-   - Execute as: **Me**
-   - Who has access: **Anyone** — required, the page posts anonymously
-4. Copy the `/exec` URL into `LEAD_ENDPOINT` near the bottom of `leak-calculator.html`
-5. Open the `/exec` URL in a browser once. It should return `{"ok":true,...}`
+Each record holds: `leadId`, name, clinic, phone (E.164), `capturedAt` (browser),
+`receivedAt` (server), page, referrer, the five `utm_*` fields, and user agent.
 
-Re-deploy as a **new version** after editing the script, or the live URL keeps
-running the old code.
+**`leads.json` is gitignored.** It holds real names and phone numbers; it must not
+end up in the repository.
 
-**If the `/exec` URL returns 403 "You need access":** the deployment is not
-anonymous. Open **Deploy → Manage deployments**, edit the active deployment, and
-set *Who has access* to **Anyone** (not "Anyone with Google account", not
-"Anyone within <your org>"). Editing an existing deployment keeps the same URL;
-creating a new one changes it.
+Properties worth knowing:
 
-Workspace domains can block anonymous web apps by admin policy. If the setting
-will not stick, the options are a personal Google account for this Sheet, or a
-different receiver — the page posts plain JSON to one URL, so any endpoint works.
+- **Appends, never overwrites.** Existing leads are read, the new one pushed, the
+  whole array rewritten.
+- **Writes are atomic.** Each write goes to `leads.json.tmp` and is renamed into
+  place, so a crash mid-write cannot truncate the file.
+- **Writes are serialised.** Every append runs through one promise chain, so
+  simultaneous submissions cannot interleave a read-modify-write and lose one.
+  Verified against 25 concurrent posts.
+- **Duplicates are dropped** on `leadId`, so the browser's retry cannot double-write.
+- **Validated server-side.** Name, clinic and a parseable phone are required
+  regardless of what the client sent; the phone is re-normalised on arrival.
+- **A corrupt file is preserved**, moved to `leads.json.corrupt-<timestamp>` rather
+  than silently replaced with an empty array.
 
-Each row records: received timestamp, name, clinic, phone, lead ID, page URL,
-referrer, the five `utm_*` parameters, and user agent. The phone column is forced
-to text so Sheets doesn't eat the leading `+`.
+### Why not Google Sheets
 
-### Delivery is best-effort, never blocking
-
-A visitor is **never** held at the gate by a network problem — losing the prospect
-costs more than losing the row. If the POST fails, the lead is queued in
-`localStorage` and retried on the next visit. Each lead carries a UUID and the
-Apps Script deduplicates on it, so a retry can't create a second row.
-
-The POST uses `Content-Type: text/plain` to stay a CORS-simple request (no
-preflight, which Apps Script handles badly), with a `no-cors` fallback if the
-response can't be read.
+An Apps Script web app was tried first and abandoned. Deployments under both a
+Workspace account and a personal account returned **403 "You need access"** to
+anonymous requests, confirmed from `curl` and from a browser with no Google
+session, with *Execute as: Me* and *Who has access: Anyone* saved. Workspace
+domains can disable anonymous Apps Script web apps by policy. The script that was
+written is kept at [`apps-script/Code.gs`](apps-script/Code.gs) if anyone wants to
+retry that route; nothing in the page depends on it.
 
 ### Before you collect real numbers
 
@@ -155,6 +151,7 @@ toward zero.
 ```bash
 node test-model.js    # 19 assertions on the leak model
 node test-lead.js     # 31 assertions on gate validation and phone normalisation
+node test-server.js   # 24 assertions on storage, spawning a real server
 ```
 
 Both extract their subject straight out of `leak-calculator.html` — between the
@@ -165,12 +162,17 @@ source of truth and the tests cannot drift from the page.
 ceiling clamp, monotonicity and degenerate inputs. `test-lead.js` covers the nine
 phone formats above, junk rejection, mandatory-field enforcement, and UTM capture.
 
+`test-server.js` spawns a real server on a throwaway port and leads file, then
+checks appending, dedupe, server-side validation, restart persistence, and 25
+concurrent writes landing without loss.
+
 ## Before it goes live
 
 - [ ] **Book a demo** points at `#book` — needs the real Calendly or form URL
-- [ ] `LEAD_ENDPOINT` is set, but the deployment returns **403** — set the web app's
-      "Who has access" to **Anyone** and re-test, or no lead is stored
-- [ ] Lock down Sheet sharing, and add a privacy policy link to the gate
+- [ ] `server.js` has to be running and reachable wherever the page is hosted —
+      a static host alone will capture leads but never store them
+- [ ] Back up `leads.json`; it is the only copy
+- [ ] Add a privacy policy link to the gate
 - [ ] Replace benchmark rates with real Clinica data if available
 - [ ] Decide whether to add case acceptance as a fourth stage (often the largest
       leak in aesthetics; the waterfall takes it without restructuring)

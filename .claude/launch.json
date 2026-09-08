@@ -3,8 +3,8 @@
   "configurations": [
     {
       "name": "leak-calculator",
-      "runtimeExecutable": "python3",
-      "runtimeArgs": ["-m", "http.server", "4891"],
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["server.js"],
       "port": 4891
     }
   ]

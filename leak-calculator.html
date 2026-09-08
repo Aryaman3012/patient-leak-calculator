@@ -603,13 +603,10 @@ if (typeof module !== 'undefined' && module.exports) {
 
 <script>
 // ---- LEAD START ----
-// Paste the /exec URL of your Apps Script deployment here. See README.
-//
-// KNOWN BROKEN: the URL below is deployed under a Google Workspace account and
-// returns 403 to anonymous requests, so nothing is stored. Replace it with a
-// deployment made from a personal Google account. Until then every lead is
-// captured and queued in localStorage, not delivered.
-var LEAD_ENDPOINT = 'https://script.google.com/macros/s/AKfycbwIvSmZjK1IwHjG1uj7PaVYQ17ld78XcmeUoZzFyOYyXm9DcV9qihGDuC0SXQ7LV6wWJA/exec';
+// Where leads are sent. Relative by default, so it works on whatever host serves
+// the page with no CORS involved. Point it at an absolute URL if the API lives
+// somewhere else. Run `node server.js` to receive these and append to leads.json.
+var LEAD_ENDPOINT = '/api/leads';
 
 var LEAD_STORE = 'clinica.lead';
 var LEAD_QUEUE = 'clinica.leadQueue';

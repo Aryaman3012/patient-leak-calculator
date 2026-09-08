@@ -1,2 +1,5 @@
 .DS_Store
 node_modules/
+leads.json
+leads.json.tmp
+leads.json.corrupt-*
