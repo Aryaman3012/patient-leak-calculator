@@ -46,15 +46,16 @@ with a `+` — and stores everything as E.164 (`+971501234567`).
 
 Leads append as rows to a Google Sheet through an Apps Script web app.
 
-**The Sheet already exists:**
-[Patient leak calculator — Leads](https://docs.google.com/spreadsheets/d/1zoa46RLC_kWlM6EUrtjyLXWJ9QD2qtc6cjy--aCBV50/edit)
-(`1zoa46RLC_kWlM6EUrtjyLXWJ9QD2qtc6cjy--aCBV50`). It is empty on purpose — the
-script creates the `Leads` tab, headers and column formatting on the first
-submission. Delete the leftover `Sheet1` tab once real rows arrive.
+> **Use a personal Google account, not a Workspace one.** A Sheet and script were
+> first set up under `flobiz.in`; the deployment returned 403 to every anonymous
+> request even with *Who has access: Anyone* saved, because Workspace domains can
+> disable anonymous Apps Script web apps by admin policy. The page posts without a
+> Google session, so it is refused. A personal `@gmail.com` account has no such
+> policy.
 
-Remaining steps, which need your Google account:
+Steps, all in the personal account:
 
-1. Open the Sheet above, then **Extensions → Apps Script**
+1. Open [sheets.new](https://sheets.new), name it, then **Extensions → Apps Script**
 2. Replace the default `Code.gs` with [`apps-script/Code.gs`](apps-script/Code.gs), and save
 3. **Deploy → New deployment → Web app**
    - Execute as: **Me**

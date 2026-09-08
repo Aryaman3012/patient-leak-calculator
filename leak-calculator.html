@@ -604,6 +604,11 @@ if (typeof module !== 'undefined' && module.exports) {
 <script>
 // ---- LEAD START ----
 // Paste the /exec URL of your Apps Script deployment here. See README.
+//
+// KNOWN BROKEN: the URL below is deployed under a Google Workspace account and
+// returns 403 to anonymous requests, so nothing is stored. Replace it with a
+// deployment made from a personal Google account. Until then every lead is
+// captured and queued in localStorage, not delivered.
 var LEAD_ENDPOINT = 'https://script.google.com/macros/s/AKfycbwIvSmZjK1IwHjG1uj7PaVYQ17ld78XcmeUoZzFyOYyXm9DcV9qihGDuC0SXQ7LV6wWJA/exec';
 
 var LEAD_STORE = 'clinica.lead';
