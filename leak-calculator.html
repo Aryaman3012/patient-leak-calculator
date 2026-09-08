@@ -25,6 +25,7 @@ body{margin:0}
   --teal:#2E8B7A;
   --light:#E8EDEB;
   --line:#D8DEDB;
+  --alert:#9E3B2E;
 }
 
 body{
@@ -195,12 +196,85 @@ body.is-clean .bars .bar:not(.keep){display:none}
 .dock a{font-size:.8125rem;font-weight:700;color:var(--ink);background:var(--gold);padding:9px 15px;border-radius:3px;text-decoration:none;flex:none}
 @media(min-width:960px){.dock{display:none}}
 
+/* ───────── lead gate ───────── */
+body.is-gated{overflow:hidden}
+body.is-gated .shell{filter:blur(7px);pointer-events:none;user-select:none}
+body.is-gated .dock{display:none}
+.gate{position:fixed;inset:0;z-index:60;display:none;align-items:center;justify-content:center;padding:20px;background:rgba(16,31,28,.74)}
+body.is-gated .gate{display:flex}
+.gate-card{
+  background:var(--porcelain);width:100%;max-width:25.5rem;
+  max-height:calc(100vh - 40px);overflow-y:auto;
+  padding:32px 30px;border-radius:4px;box-shadow:0 24px 64px rgba(0,0,0,.4);
+}
+.gate-card h2{
+  font-family:"Newsreader",Georgia,serif;font-weight:300;
+  font-size:1.85rem;line-height:1.12;letter-spacing:-.012em;margin:0 0 10px;
+}
+.gate-lede{font-size:.9375rem;line-height:1.55;color:#43524E;margin:0 0 26px}
+.gfield{margin:0 0 20px}
+.gfield label{display:block;font-size:.875rem;font-weight:600;margin:0 0 7px}
+.gfield .box{display:flex;align-items:baseline;gap:9px;border-bottom:2px solid var(--ink);padding-bottom:6px}
+.gfield .box .cc{font-size:.9375rem;font-weight:600;color:var(--steel);flex:none}
+.gfield input{
+  font:inherit;font-size:1.0625rem;font-weight:500;color:var(--ink);
+  background:transparent;border:0;padding:0;width:100%;min-width:0;
+}
+.gfield input:focus{outline:none}
+.gfield .box:focus-within{border-bottom-color:var(--teal)}
+.gfield .box:focus-within .cc{color:var(--teal)}
+.gfield input::placeholder{color:#B6C0BC;font-weight:400}
+.gfield.bad .box{border-bottom-color:var(--alert)}
+.gfield .err{font-size:.8125rem;color:var(--alert);margin:7px 0 0;min-height:0}
+.gfield .err:empty{display:none}
+.gate .btn{width:100%;text-align:center;padding:15px 26px;font-size:1rem}
+.gate .btn[disabled]{opacity:.6;cursor:default}
+.gate-fine{font-size:.75rem;line-height:1.5;color:var(--steel);margin:16px 0 0}
+.gate-note{font-size:.8125rem;color:var(--alert);margin:12px 0 0}
+.gate-note:empty{display:none}
+
 @media(prefers-reduced-motion:reduce){
   *{transition-duration:.01ms !important;animation-duration:.01ms !important}
 }
 </style>
 </head>
 <body>
+
+<div class="gate" id="gate" role="dialog" aria-modal="true" aria-labelledby="gateTitle">
+  <div class="gate-card">
+    <h2 id="gateTitle">First, who are we calculating for?</h2>
+    <p class="gate-lede">Three details and the calculator opens. We use them to send your breakdown and nothing else.</p>
+    <form id="gateForm" novalidate>
+      <div class="gfield" id="fName">
+        <label for="gName">Your name</label>
+        <div class="box"><input id="gName" name="name" type="text" autocomplete="name" autocapitalize="words" placeholder="Layla Haddad" aria-describedby="eName"></div>
+        <p class="err" id="eName" role="alert"></p>
+      </div>
+      <div class="gfield" id="fClinic">
+        <label for="gClinic">Clinic name</label>
+        <div class="box"><input id="gClinic" name="clinic" type="text" autocomplete="organization" placeholder="Jumeirah Skin &amp; Laser" aria-describedby="eClinic"></div>
+        <p class="err" id="eClinic" role="alert"></p>
+      </div>
+      <div class="gfield" id="fPhone">
+        <label for="gPhone">Phone number</label>
+        <div class="box"><span class="cc">+971</span><input id="gPhone" name="phone" type="tel" autocomplete="tel" inputmode="tel" placeholder="50 123 4567" aria-describedby="ePhone"></div>
+        <p class="err" id="ePhone" role="alert"></p>
+      </div>
+      <button class="btn" type="submit" id="gateBtn">Open the calculator</button>
+      <p class="gate-note" id="gateNote" role="status"></p>
+      <p class="gate-fine">Outside the UAE, paste your full number with a + and country code.</p>
+    </form>
+  </div>
+</div>
+
+<script>
+  // Applied before .shell is parsed, so the calculator is never briefly visible.
+  (function () {
+    var seen = false;
+    try { seen = !!localStorage.getItem('clinica.lead'); } catch (e) {}
+    if (!seen) document.body.classList.add('is-gated');
+  })();
+</script>
 
 <div class="shell">
 
@@ -526,5 +600,188 @@ if (typeof module !== 'undefined' && module.exports) {
   render();
 })();
 </script>
+
+<script>
+// ---- LEAD START ----
+// Paste the /exec URL of your Apps Script deployment here. See README.
+var LEAD_ENDPOINT = '';
+
+var LEAD_STORE = 'clinica.lead';
+var LEAD_QUEUE = 'clinica.leadQueue';
+
+// Accepts what UAE clinics actually type: 050…, 50…, 04…, +971…, or a full
+// international number. Returns E.164, or null if it can't be a phone number.
+function normalisePhone(raw) {
+  var t = String(raw == null ? '' : raw).trim();
+  if (!t) return null;
+  var international = t.charAt(0) === '+';
+  var d = t.replace(/\D/g, '');
+  if (!d) return null;
+  if (!international) {
+    if (/^0\d{8,9}$/.test(d)) d = '971' + d.slice(1);        // 050… or 04…
+    else if (/^[2-9]\d{7,8}$/.test(d)) d = '971' + d;        // bare local part
+  }
+  if (d.length < 8 || d.length > 15) return null;
+  return '+' + d;
+}
+
+function validateLead(input) {
+  var errors = {};
+  var name = String(input.name == null ? '' : input.name).trim().replace(/\s+/g, ' ');
+  var clinic = String(input.clinic == null ? '' : input.clinic).trim().replace(/\s+/g, ' ');
+  var phone = normalisePhone(input.phone);
+
+  if (name.length < 2) errors.name = 'Please enter your name.';
+  if (clinic.length < 2) errors.clinic = 'Please enter your clinic name.';
+  if (!phone) errors.phone = 'That does not look like a phone number.';
+
+  return {
+    valid: Object.keys(errors).length === 0,
+    errors: errors,
+    lead: { name: name, clinic: clinic, phone: phone }
+  };
+}
+
+function utmFrom(search) {
+  var out = {}, keys = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content'];
+  var params = new URLSearchParams(search || '');
+  keys.forEach(function (k) { if (params.get(k)) out[k] = params.get(k); });
+  return out;
+}
+// ---- LEAD END ----
+
+(function () {
+  var $ = function (i) { return document.getElementById(i); };
+  var gate = $('gate'), form = $('gateForm'), btn = $('gateBtn'), note = $('gateNote');
+  var FIELDS = [
+    { key: 'name',   input: 'gName',   wrap: 'fName',   err: 'eName' },
+    { key: 'clinic', input: 'gClinic', wrap: 'fClinic', err: 'eClinic' },
+    { key: 'phone',  input: 'gPhone',  wrap: 'fPhone',  err: 'ePhone' }
+  ];
+
+  function read(k) { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } }
+  function write(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+
+  function uuid() {
+    if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
+    return 'lead-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
+  }
+
+  // Delivery is best-effort and never blocks the visitor. Anything that fails to
+  // send is queued and retried on the next visit; the server dedupes on leadId.
+  function send(lead) {
+    if (!LEAD_ENDPOINT) return Promise.resolve({ ok: false, reason: 'unconfigured' });
+    var body = JSON.stringify(lead);
+    var ctl = ('AbortController' in window) ? new AbortController() : null;
+    var timer = ctl ? setTimeout(function () { ctl.abort(); }, 8000) : null;
+    var opts = { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: body };
+    if (ctl) opts.signal = ctl.signal;
+
+    return fetch(LEAD_ENDPOINT, opts)
+      .then(function (res) {
+        if (timer) clearTimeout(timer);
+        return res.ok ? { ok: true } : { ok: false, reason: 'http ' + res.status };
+      })
+      .catch(function () {
+        if (timer) clearTimeout(timer);
+        // Apps Script CORS can block reading the reply even when the write lands.
+        // Fire and forget, then treat it as unconfirmed rather than lost.
+        return fetch(LEAD_ENDPOINT, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: body })
+          .then(function () { return { ok: true, unconfirmed: true }; })
+          .catch(function () { return { ok: false, reason: 'network' }; });
+      });
+  }
+
+  function queue(lead) {
+    var q = read(LEAD_QUEUE) || [];
+    if (!q.some(function (x) { return x.leadId === lead.leadId; })) { q.push(lead); write(LEAD_QUEUE, q); }
+  }
+
+  function flushQueue() {
+    var q = read(LEAD_QUEUE) || [];
+    if (!q.length || !LEAD_ENDPOINT) return;
+    write(LEAD_QUEUE, []);
+    q.forEach(function (lead) {
+      send(lead).then(function (r) { if (!r.ok) queue(lead); });
+    });
+  }
+
+  function unlock() {
+    document.body.classList.remove('is-gated');
+    document.querySelector('.shell').removeAttribute('aria-hidden');
+    var first = $('enquiries');
+    if (first) first.focus({ preventScroll: true });
+  }
+
+  function showErrors(errors) {
+    FIELDS.forEach(function (f) {
+      var msg = errors[f.key] || '';
+      $(f.err).textContent = msg;
+      $(f.wrap).classList.toggle('bad', !!msg);
+      $(f.input).setAttribute('aria-invalid', msg ? 'true' : 'false');
+    });
+    var firstBad = FIELDS.filter(function (f) { return errors[f.key]; })[0];
+    if (firstBad) $(firstBad.input).focus();
+  }
+
+  if (!document.body.classList.contains('is-gated')) {
+    flushQueue();
+    return;
+  }
+
+  document.querySelector('.shell').setAttribute('aria-hidden', 'true');
+  setTimeout(function () { $('gName').focus(); }, 60);
+
+  FIELDS.forEach(function (f) {
+    $(f.input).addEventListener('input', function () {
+      if ($(f.wrap).classList.contains('bad')) {
+        $(f.err).textContent = '';
+        $(f.wrap).classList.remove('bad');
+        $(f.input).setAttribute('aria-invalid', 'false');
+      }
+    });
+  });
+
+  // Keep tabbing inside the dialog while it is up.
+  gate.addEventListener('keydown', function (e) {
+    if (e.key !== 'Tab') return;
+    var items = gate.querySelectorAll('input, button');
+    var first = items[0], last = items[items.length - 1];
+    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+  });
+
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var result = validateLead({ name: $('gName').value, clinic: $('gClinic').value, phone: $('gPhone').value });
+    showErrors(result.errors);
+    if (!result.valid) return;
+
+    var lead = {
+      leadId: uuid(),
+      name: result.lead.name,
+      clinic: result.lead.clinic,
+      phone: result.lead.phone,
+      capturedAt: new Date().toISOString(),
+      page: location.href.split('#')[0],
+      referrer: document.referrer || '',
+      userAgent: navigator.userAgent || ''
+    };
+    var utm = utmFrom(location.search);
+    Object.keys(utm).forEach(function (k) { lead[k] = utm[k]; });
+
+    btn.disabled = true;
+    btn.textContent = 'Opening…';
+    note.textContent = '';
+
+    send(lead).then(function (r) {
+      if (!r.ok) queue(lead);
+      write(LEAD_STORE, { name: lead.name, clinic: lead.clinic, phone: lead.phone, leadId: lead.leadId });
+      unlock();
+    });
+  });
+})();
+</script>
+
 </body>
 </html>
