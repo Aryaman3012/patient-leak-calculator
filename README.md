@@ -65,6 +65,16 @@ Remaining steps, which need your Google account:
 Re-deploy as a **new version** after editing the script, or the live URL keeps
 running the old code.
 
+**If the `/exec` URL returns 403 "You need access":** the deployment is not
+anonymous. Open **Deploy → Manage deployments**, edit the active deployment, and
+set *Who has access* to **Anyone** (not "Anyone with Google account", not
+"Anyone within <your org>"). Editing an existing deployment keeps the same URL;
+creating a new one changes it.
+
+Workspace domains can block anonymous web apps by admin policy. If the setting
+will not stick, the options are a personal Google account for this Sheet, or a
+different receiver — the page posts plain JSON to one URL, so any endpoint works.
+
 Each row records: received timestamp, name, clinic, phone, lead ID, page URL,
 referrer, the five `utm_*` parameters, and user agent. The phone column is forced
 to text so Sheets doesn't eat the leading `+`.
@@ -157,7 +167,8 @@ phone formats above, junk rejection, mandatory-field enforcement, and UTM captur
 ## Before it goes live
 
 - [ ] **Book a demo** points at `#book` — needs the real Calendly or form URL
-- [ ] `LEAD_ENDPOINT` is empty — paste the Apps Script `/exec` URL, or no lead is stored
+- [ ] `LEAD_ENDPOINT` is set, but the deployment returns **403** — set the web app's
+      "Who has access" to **Anyone** and re-test, or no lead is stored
 - [ ] Lock down Sheet sharing, and add a privacy policy link to the gate
 - [ ] Replace benchmark rates with real Clinica data if available
 - [ ] Decide whether to add case acceptance as a fourth stage (often the largest
